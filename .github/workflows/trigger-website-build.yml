@@ -1,0 +1,77 @@
+name: Trigger Website Build
+
+# Trigger this workflow when markdown files are pushed to the repository
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - '_posts/**.md'
+      - '_posts/**.markdown'
+
+  # Allow manual triggering
+  workflow_dispatch:
+
+jobs:
+  trigger-rebuild:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Notify repositories to rebuild
+        run: |
+          echo "Content update detected in _posts/"
+          echo "Triggering rebuild for connected websites..."
+          
+          # Get the list of changed markdown files
+          git diff --name-only HEAD~1 HEAD | grep -E "^_posts/.*\.(md|markdown)$" || echo "No markdown files changed"
+
+      - name: Trigger repository dispatch event
+        env:
+          GITHUB_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
+        run: |
+          # Replace these with your target repositories
+          # Format: OWNER/REPO
+          TARGET_REPOS="${{ secrets.TARGET_REPOSITORIES }}"
+          
+          if [ -z "$TARGET_REPOS" ]; then
+            echo "No target repositories configured. Set TARGET_REPOSITORIES secret."
+            echo "Example: 'owner1/repo1,owner2/repo2'"
+            exit 0
+          fi
+          
+          # Split the comma-separated list of repositories
+          IFS=',' read -ra REPOS <<< "$TARGET_REPOS"
+          
+          for repo in "${REPOS[@]}"; do
+            repo=$(echo "$repo" | xargs) # Trim whitespace
+            echo "Triggering rebuild for: $repo"
+            
+            # Send repository dispatch event
+            curl -X POST \
+              -H "Accept: application/vnd.github.v3+json" \
+              -H "Authorization: token $GITHUB_TOKEN" \
+              "https://api.github.com/repos/$repo/dispatches" \
+              -d '{"event_type":"content-update","client_payload":{"repository":"'"$GITHUB_REPOSITORY"'","ref":"'"$GITHUB_REF"'","sha":"'"$GITHUB_SHA"'"}}'
+            
+            if [ $? -eq 0 ]; then
+              echo "✓ Successfully triggered rebuild for $repo"
+            else
+              echo "✗ Failed to trigger rebuild for $repo"
+            fi
+          done
+
+      - name: Summary
+        run: |
+          echo "### Content Update Notification Complete ✓" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Changed files:" >> $GITHUB_STEP_SUMMARY
+          git diff --name-only HEAD~1 HEAD | grep -E "^_posts/.*\.(md|markdown)$" | while read file; do
+            echo "- \`$file\`" >> $GITHUB_STEP_SUMMARY
+          done || echo "- No markdown files in _posts/" >> $GITHUB_STEP_SUMMARY
