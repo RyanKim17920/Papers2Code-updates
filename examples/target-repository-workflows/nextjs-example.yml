@@ -1,0 +1,108 @@
+# Next.js Example
+#
+# Place this file in your target repository at:
+# .github/workflows/content-update.yml
+#
+# This workflow:
+# 1. Receives content updates from Papers2Code-updates
+# 2. Syncs markdown files to your Next.js site
+# 3. Builds the Next.js site
+# 4. Deploys to Vercel or GitHub Pages
+
+name: Update Next.js Site
+
+on:
+  repository_dispatch:
+    types: [content-update]
+  
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Next.js site
+        uses: actions/checkout@v4
+      
+      - name: Fetch content from Papers2Code-updates
+        if: github.event_name == 'repository_dispatch'
+        env:
+          SOURCE_REPO: ${{ github.event.client_payload.repository }}
+          SOURCE_SHA: ${{ github.event.client_payload.sha }}
+        run: |
+          echo "📥 Fetching content from $SOURCE_REPO"
+          
+          # Clone source repository
+          git clone https://github.com/$SOURCE_REPO.git source-content
+          cd source-content
+          git checkout $SOURCE_SHA
+          
+          # Sync markdown files to Next.js content directory
+          mkdir -p ../content/posts
+          cp -r _posts/* ../content/posts/
+          
+          echo "✅ Content synced"
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build Next.js site
+        run: npm run build
+        env:
+          NODE_ENV: production
+      
+      # Option 1: Deploy to Vercel
+      - name: Deploy to Vercel
+        if: false  # Set to true to enable Vercel deployment
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          npm install -g vercel
+          vercel --prod --token=$VERCEL_TOKEN
+      
+      # Option 2: Deploy to GitHub Pages (for static export)
+      - name: Export static site
+        if: true  # Set to false if not using static export
+        run: npm run export || npm run build
+      
+      - name: Upload Pages artifact
+        if: true  # Set to false if not deploying to GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./out  # or ./build, depending on your export directory
+      
+      - name: Deploy to GitHub Pages
+        if: true  # Set to false if not deploying to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+      
+      - name: Summary
+        run: |
+          echo "### Next.js Site Updated ✅" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
+            echo "**Source:** ${{ github.event.client_payload.repository }}" >> $GITHUB_STEP_SUMMARY
+            echo "**Commit:** \`${{ github.event.client_payload.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Build completed successfully!" >> $GITHUB_STEP_SUMMARY
+
+# Required permissions for GitHub Pages deployment
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one concurrent deployment
+concurrency:
+  group: "pages"
+  cancel-in-progress: true

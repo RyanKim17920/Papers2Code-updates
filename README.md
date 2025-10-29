@@ -2,6 +2,12 @@
 
 A content repository that automatically notifies other repositories to rebuild when new markdown files are pushed.
 
+## 📚 Documentation
+
+- **[Integration Guide](INTEGRATION_GUIDE.md)** - Comprehensive guide explaining how this repository connects to target repositories and how to structure them
+- **[Example Workflows](examples/target-repository-workflows/)** - Ready-to-use workflow templates for Jekyll, Hugo, Next.js, and more
+- **[Quick Start](#setup-instructions)** - Basic setup instructions (below)
+
 ## Repository Structure
 
 ```
@@ -11,6 +17,9 @@ Papers2Code-updates/
 ├── .github/
 │   └── workflows/
 │       └── trigger-website-build.yml  # Automation workflow
+├── examples/
+│   └── target-repository-workflows/ # Example workflows for target repositories
+├── INTEGRATION_GUIDE.md             # Comprehensive integration guide
 └── README.md
 ```
 
@@ -41,7 +50,9 @@ owner1/repo1,owner2/repo2,owner3/repo3
 
 ### 2. Configure Target Repositories
 
-Each target repository should have a workflow that listens for the `repository_dispatch` event:
+Each target repository (Repository B) should have a workflow that listens for the `repository_dispatch` event.
+
+**Quick example:**
 
 ```yaml
 name: Rebuild on Content Update
@@ -57,11 +68,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       
+      - name: Fetch content from Papers2Code-updates
+        run: |
+          git clone https://github.com/${{ github.event.client_payload.repository }}.git source
+          cd source && git checkout ${{ github.event.client_payload.sha }}
+          cp -r _posts/* ../content/posts/
+      
       - name: Rebuild site
         run: |
-          echo "Content updated in ${{ github.event.client_payload.repository }}"
           # Add your build commands here
+          npm run build
 ```
+
+**For complete examples tailored to your tech stack, see:**
+- [Integration Guide](INTEGRATION_GUIDE.md) - Detailed explanation of how the connection works
+- [Example Workflows](examples/target-repository-workflows/) - Ready-to-use templates for Jekyll, Hugo, Next.js, and more
 
 ## Usage
 
@@ -141,6 +162,35 @@ See [`_posts/sample-update.md`](_posts/sample-update.md) for a complete example 
 - Go to Actions tab in this repository
 - Click on "Trigger Website Build" to see workflow runs
 - Review logs for detailed information about notifications sent
+
+## How It Works
+
+### Architecture Overview
+
+```
+┌─────────────────────────────────────┐
+│  Repository A (Papers2Code-updates) │
+│                                     │
+│  1. Markdown file pushed to _posts/ │
+│  2. Workflow triggered              │
+│  3. GitHub API calls sent           │
+└──────────────┬──────────────────────┘
+               │
+               │ repository_dispatch event
+               │ (with commit SHA & metadata)
+               ▼
+┌─────────────────────────────────────┐
+│  Repository B (Your Website)        │
+│                                     │
+│  1. Receives dispatch event         │
+│  2. Fetches MD files from Repo A    │
+│  3. Rebuilds and deploys website    │
+└─────────────────────────────────────┘
+```
+
+This repository uses GitHub's **Repository Dispatch API** to send notifications to target repositories when content changes. Target repositories listen for these events and trigger their own workflows to fetch the updated content and rebuild their sites.
+
+For a detailed explanation of the connection mechanism and data flow, see the [Integration Guide](INTEGRATION_GUIDE.md).
 
 ## License
 

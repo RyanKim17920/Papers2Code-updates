@@ -1,0 +1,93 @@
+# Basic Example: Simple content synchronization and rebuild
+# 
+# Place this file in your target repository at:
+# .github/workflows/content-update.yml
+#
+# This is the simplest configuration for receiving content updates
+# from Papers2Code-updates repository.
+
+name: Rebuild on Content Update
+
+on:
+  repository_dispatch:
+    types: [content-update]  # Must match the event_type sent from source repo
+
+jobs:
+  rebuild-site:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write  # Needed if committing files back to repo
+    
+    steps:
+      # Step 1: Checkout your repository
+      - name: Checkout target repository
+        uses: actions/checkout@v4
+      
+      # Step 2: Display information about the content update
+      - name: Log update notification
+        run: |
+          echo "📢 Content update notification received!"
+          echo "Source repository: ${{ github.event.client_payload.repository }}"
+          echo "Source branch: ${{ github.event.client_payload.ref }}"
+          echo "Source commit: ${{ github.event.client_payload.sha }}"
+      
+      # Step 3: Fetch content from the source repository
+      - name: Fetch content from source repository
+        env:
+          SOURCE_REPO: ${{ github.event.client_payload.repository }}
+          SOURCE_SHA: ${{ github.event.client_payload.sha }}
+        run: |
+          echo "Cloning source repository: $SOURCE_REPO"
+          git clone https://github.com/$SOURCE_REPO.git source-content
+          
+          cd source-content
+          echo "Checking out commit: $SOURCE_SHA"
+          git checkout $SOURCE_SHA
+          
+          # Copy markdown files to your content directory
+          # Adjust the paths according to your repository structure
+          echo "Copying markdown files..."
+          mkdir -p ../content/posts
+          cp -r _posts/* ../content/posts/
+          
+          echo "✅ Content synchronized successfully"
+      
+      # Step 4: Install your build dependencies (customize as needed)
+      - name: Install dependencies
+        run: |
+          echo "Installing dependencies..."
+          # Uncomment and modify based on your build system:
+          # npm install
+          # pip install -r requirements.txt
+          # bundle install
+          # go mod download
+      
+      # Step 5: Build your site (customize as needed)
+      - name: Build site
+        run: |
+          echo "Building site..."
+          # Uncomment and modify based on your build system:
+          # npm run build
+          # hugo --minify
+          # jekyll build
+          # python build.py
+      
+      # Step 6: Deploy (customize as needed)
+      - name: Deploy
+        run: |
+          echo "Deploying site..."
+          # Uncomment and modify based on your deployment target:
+          # npm run deploy
+          # ./deploy.sh
+          # Or use GitHub Actions like peaceiris/actions-gh-pages
+      
+      # Step 7: Create summary
+      - name: Summary
+        run: |
+          echo "### Content Update Summary ✅" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Source Repository:** ${{ github.event.client_payload.repository }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit SHA:** ${{ github.event.client_payload.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Content has been synchronized and site has been rebuilt." >> $GITHUB_STEP_SUMMARY
