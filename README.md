@@ -5,7 +5,10 @@ A content repository that automatically notifies other repositories to rebuild w
 ## 📚 Documentation
 
 - **[Integration Guide](INTEGRATION_GUIDE.md)** - Comprehensive guide explaining how this repository connects to target repositories and how to structure them
+- **[Connection Diagram](CONNECTION_DIAGRAM.md)** - Visual explanation of how repositories communicate
+- **[Repository B Setup](examples/REPOSITORY_B_SETUP.md)** - Quick reference for setting up target repositories
 - **[Example Workflows](examples/target-repository-workflows/)** - Ready-to-use workflow templates for Jekyll, Hugo, Next.js, and more
+- **[FAQ](FAQ.md)** - Frequently asked questions and troubleshooting
 - **[Quick Start](#setup-instructions)** - Basic setup instructions (below)
 
 ## Repository Structure
