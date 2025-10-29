@@ -1,0 +1,106 @@
+# Hugo Example
+#
+# Place this file in your target repository at:
+# .github/workflows/content-update.yml
+#
+# This workflow:
+# 1. Receives content updates from Papers2Code-updates
+# 2. Syncs markdown files to your Hugo site
+# 3. Builds the Hugo site
+# 4. Deploys to GitHub Pages
+
+name: Update Hugo Site
+
+on:
+  repository_dispatch:
+    types: [content-update]
+  
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Hugo site
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive  # Fetch Hugo themes (if using git submodules)
+          fetch-depth: 0         # Fetch all history for .GitInfo and .Lastmod
+      
+      - name: Fetch content from Papers2Code-updates
+        if: github.event_name == 'repository_dispatch'
+        env:
+          SOURCE_REPO: ${{ github.event.client_payload.repository }}
+          SOURCE_SHA: ${{ github.event.client_payload.sha }}
+        run: |
+          echo "📥 Fetching content from $SOURCE_REPO"
+          
+          # Clone source repository
+          git clone https://github.com/$SOURCE_REPO.git source-content
+          cd source-content
+          git checkout $SOURCE_SHA
+          
+          # Convert Jekyll-style posts to Hugo format
+          # Hugo expects posts in content/posts/ directory
+          mkdir -p ../content/posts
+          
+          # Copy and optionally transform files
+          for file in _posts/*.md; do
+            if [ -f "$file" ]; then
+              filename=$(basename "$file")
+              # Hugo prefers dates in the filename
+              cp "$file" "../content/posts/$filename"
+            fi
+          done
+          
+          echo "✅ Content synced to Hugo content directory"
+          ls -la ../content/posts/
+      
+      - name: Setup Hugo
+        uses: peaceiris/actions-hugo@v2
+        with:
+          hugo-version: 'latest'
+          extended: true  # Set to true if using Hugo Extended (for SCSS/Sass support)
+      
+      - name: Setup Pages
+        id: pages
+        uses: actions/configure-pages@v4
+      
+      - name: Build with Hugo
+        env:
+          # For maximum compatibility with GitHub Pages, use environment variable
+          HUGO_ENVIRONMENT: production
+          HUGO_ENV: production
+        run: |
+          hugo \
+            --minify \
+            --baseURL "${{ steps.pages.outputs.base_url }}/"
+      
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./public
+      
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+      
+      - name: Summary
+        run: |
+          echo "### Hugo Site Updated and Deployed ✅" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
+            echo "**Source:** ${{ github.event.client_payload.repository }}" >> $GITHUB_STEP_SUMMARY
+            echo "**Commit:** \`${{ github.event.client_payload.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "**Site URL:** ${{ steps.deployment.outputs.page_url }}" >> $GITHUB_STEP_SUMMARY

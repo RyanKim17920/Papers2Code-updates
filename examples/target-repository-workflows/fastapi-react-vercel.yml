@@ -1,0 +1,191 @@
+# FastAPI + React + Vercel Example
+#
+# Place this file in your target repository (Repository B) at:
+# .github/workflows/content-update.yml
+#
+# This workflow is designed for a Vercel-deployed application with:
+# - FastAPI backend
+# - React frontend
+# - Markdown content consumed by the backend or frontend
+#
+# The workflow:
+# 1. Receives content updates from Papers2Code-updates
+# 2. Syncs markdown files to your repository
+# 3. Optionally processes content (e.g., generate JSON API from markdown)
+# 4. Triggers Vercel deployment
+
+name: Update Content and Deploy to Vercel
+
+on:
+  repository_dispatch:
+    types: [content-update]
+  
+  # Also allow manual triggering for testing
+  workflow_dispatch:
+
+jobs:
+  sync-content-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Fetch content from Papers2Code-updates
+        if: github.event_name == 'repository_dispatch'
+        env:
+          SOURCE_REPO: ${{ github.event.client_payload.repository }}
+          SOURCE_SHA: ${{ github.event.client_payload.sha }}
+        run: |
+          echo "📥 Fetching content from $SOURCE_REPO at commit $SOURCE_SHA"
+          
+          # Clone the source repository
+          git clone https://github.com/$SOURCE_REPO.git source-content
+          cd source-content
+          git checkout $SOURCE_SHA
+          
+          # Option 1: Sync to backend directory (if FastAPI serves markdown)
+          # Adjust path based on your project structure
+          mkdir -p ../backend/content/posts
+          cp -r _posts/* ../backend/content/posts/
+          
+          # Option 2: Sync to frontend directory (if React displays markdown)
+          # Uncomment if your React app directly uses markdown
+          # mkdir -p ../frontend/public/content/posts
+          # cp -r _posts/* ../frontend/public/content/posts/
+          
+          # Option 3: Sync to shared content directory
+          # mkdir -p ../content/posts
+          # cp -r _posts/* ../content/posts/
+          
+          echo "✅ Content synced successfully"
+          cd ..
+          ls -la backend/content/posts/ || ls -la content/posts/ || echo "Check your content directory path"
+      
+      # Optional: Parse markdown and generate JSON for API consumption
+      - name: Setup Python (for content processing)
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Process markdown to JSON (optional)
+        run: |
+          echo "📝 Processing markdown files..."
+          
+          # Install dependencies for markdown processing
+          pip install python-frontmatter markdown
+          
+          # Create a script to parse markdown and extract frontmatter
+          cat > process_content.py << 'EOF'
+          import os
+          import json
+          import frontmatter
+          from pathlib import Path
+          
+          def process_markdown_files(input_dir, output_file):
+              posts = []
+              
+              for md_file in Path(input_dir).glob('*.md'):
+                  with open(md_file, 'r', encoding='utf-8') as f:
+                      post = frontmatter.load(f)
+                      
+                      post_data = {
+                          'slug': md_file.stem,
+                          'title': post.get('title', ''),
+                          'date': str(post.get('date', '')),
+                          'author': post.get('author', ''),
+                          'categories': post.get('categories', []),
+                          'tags': post.get('tags', []),
+                          'description': post.get('description', ''),
+                          'content': post.content
+                      }
+                      posts.append(post_data)
+              
+              # Sort by date (newest first)
+              posts.sort(key=lambda x: x['date'], reverse=True)
+              
+              # Write to JSON file
+              with open(output_file, 'w', encoding='utf-8') as f:
+                  json.dump(posts, f, indent=2, ensure_ascii=False)
+              
+              print(f"✅ Processed {len(posts)} posts")
+              return len(posts)
+          
+          if __name__ == '__main__':
+              # Adjust paths based on your structure
+              input_dir = 'backend/content/posts'  # or 'content/posts'
+              output_file = 'backend/content/posts.json'  # or 'frontend/public/posts.json'
+              
+              if os.path.exists(input_dir):
+                  count = process_markdown_files(input_dir, output_file)
+                  print(f"Generated {output_file} with {count} posts")
+              else:
+                  print(f"Warning: {input_dir} not found. Skipping processing.")
+          EOF
+          
+          # Run the processing script
+          python process_content.py
+          
+          echo "✅ Content processing complete"
+      
+      # Option A: Commit processed content back to repository
+      # (Useful if you want to version the processed JSON or markdown)
+      - name: Commit updated content
+        if: true  # Set to false if you don't want to commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Add content files
+          git add backend/content/ || git add content/ || echo "No content to add"
+          
+          # Check if there are changes
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update content from ${{ github.event.client_payload.repository }}
+            
+            Source commit: ${{ github.event.client_payload.sha }}"
+            git push
+          fi
+      
+      # Option B: Deploy to Vercel
+      - name: Deploy to Vercel
+        if: true  # Set to false if you handle deployment differently
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          # Install Vercel CLI
+          npm install -g vercel
+          
+          # Deploy to production
+          # The --yes flag skips confirmation prompts
+          vercel --prod --token=$VERCEL_TOKEN --yes
+          
+          echo "✅ Deployed to Vercel"
+      
+      # Alternative: Trigger Vercel deploy hook (simpler, no CLI needed)
+      - name: Trigger Vercel Deploy Hook (alternative)
+        if: false  # Set to true if using deploy hooks instead of Vercel CLI
+        env:
+          VERCEL_DEPLOY_HOOK_URL: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
+        run: |
+          curl -X POST "$VERCEL_DEPLOY_HOOK_URL"
+          echo "✅ Triggered Vercel deployment via webhook"
+      
+      - name: Summary
+        run: |
+          echo "### Content Update and Deployment Complete ✅" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
+            echo "**Source Repository:** ${{ github.event.client_payload.repository }}" >> $GITHUB_STEP_SUMMARY
+            echo "**Commit SHA:** \`${{ github.event.client_payload.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Content has been synchronized and deployed to Vercel." >> $GITHUB_STEP_SUMMARY
+
+# Required permissions
+permissions:
+  contents: write  # Needed for committing files

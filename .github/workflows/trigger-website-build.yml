@@ -1,6 +1,7 @@
 name: Trigger Website Build
 
-# Trigger this workflow when markdown files are pushed to the repository
+# This workflow automatically notifies target repositories when content is updated
+# See INTEGRATION_GUIDE.md for setup instructions
 on:
   push:
     branches:
@@ -10,7 +11,7 @@ on:
       - '_posts/**.md'
       - '_posts/**.markdown'
 
-  # Allow manual triggering
+  # Allow manual triggering via GitHub Actions UI
   workflow_dispatch:
 
 jobs:
@@ -36,42 +37,63 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
         run: |
-          # Replace these with your target repositories
-          # Format: OWNER/REPO
+          # Read target repositories from repository secrets
+          # Expected format: OWNER/REPO,OWNER/REPO (comma-separated)
+          # Example: "RyanKim17920/my-website,JohnDoe/blog"
           TARGET_REPOS="${{ secrets.TARGET_REPOSITORIES }}"
           
           if [ -z "$TARGET_REPOS" ]; then
-            echo "No target repositories configured. Set TARGET_REPOSITORIES secret."
-            echo "Example: 'owner1/repo1,owner2/repo2'"
+            echo "⚠️  No target repositories configured."
+            echo "Please set the TARGET_REPOSITORIES secret in repository settings."
+            echo "Format: 'owner1/repo1,owner2/repo2'"
+            echo ""
+            echo "See INTEGRATION_GUIDE.md for setup instructions."
             exit 0
           fi
+          
+          echo "📡 Sending dispatch events to target repositories..."
+          echo ""
           
           # Split the comma-separated list of repositories
           IFS=',' read -ra REPOS <<< "$TARGET_REPOS"
           
           for repo in "${REPOS[@]}"; do
             repo=$(echo "$repo" | xargs) # Trim whitespace
-            echo "Triggering rebuild for: $repo"
+            echo "→ Notifying: $repo"
             
-            # Send repository dispatch event
-            curl -X POST \
+            # Send repository dispatch event via GitHub API
+            # The target repository must have a workflow listening for "content-update" events
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
               -H "Accept: application/vnd.github.v3+json" \
               -H "Authorization: token $GITHUB_TOKEN" \
               "https://api.github.com/repos/$repo/dispatches" \
-              -d '{"event_type":"content-update","client_payload":{"repository":"'"$GITHUB_REPOSITORY"'","ref":"'"$GITHUB_REF"'","sha":"'"$GITHUB_SHA"'"}}'
+              -d '{"event_type":"content-update","client_payload":{"repository":"'"$GITHUB_REPOSITORY"'","ref":"'"$GITHUB_REF"'","sha":"'"$GITHUB_SHA"'"}}')
             
-            if [ $? -eq 0 ]; then
-              echo "✓ Successfully triggered rebuild for $repo"
+            # Check HTTP status code
+            if [ "$HTTP_STATUS" -eq 204 ] || [ "$HTTP_STATUS" -eq 200 ]; then
+              echo "  ✅ Success (HTTP $HTTP_STATUS)"
             else
-              echo "✗ Failed to trigger rebuild for $repo"
+              echo "  ❌ Failed (HTTP $HTTP_STATUS)"
+              echo "  Check: Token permissions, repository name, target repo workflow"
             fi
+            echo ""
           done
+          
+          echo "📤 Dispatch events sent to ${#REPOS[@]} repository/repositories"
 
       - name: Summary
         run: |
-          echo "### Content Update Notification Complete ✓" >> $GITHUB_STEP_SUMMARY
+          echo "### 📬 Content Update Notification Complete" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Changed files:" >> $GITHUB_STEP_SUMMARY
+          echo "**Target repositories:** \`${{ secrets.TARGET_REPOSITORIES }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Changed markdown files:**" >> $GITHUB_STEP_SUMMARY
           git diff --name-only HEAD~1 HEAD | grep -E "^_posts/.*\.(md|markdown)$" | while read file; do
             echo "- \`$file\`" >> $GITHUB_STEP_SUMMARY
-          done || echo "- No markdown files in _posts/" >> $GITHUB_STEP_SUMMARY
+          done || echo "- _(No markdown files changed)_" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** \`$GITHUB_SHA\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Target repositories should now be rebuilding with the updated content." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📖 [View Integration Guide](https://github.com/$GITHUB_REPOSITORY/blob/main/INTEGRATION_GUIDE.md)" >> $GITHUB_STEP_SUMMARY

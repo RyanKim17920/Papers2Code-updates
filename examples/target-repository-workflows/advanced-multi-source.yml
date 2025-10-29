@@ -1,0 +1,185 @@
+# Advanced Example: Multiple Content Sources
+#
+# Place this file in your target repository at:
+# .github/workflows/content-update.yml
+#
+# This workflow handles content from multiple source repositories
+# and organizes them into different directories based on the source.
+
+name: Aggregate Content from Multiple Sources
+
+on:
+  repository_dispatch:
+    types: [content-update]
+  
+  workflow_dispatch:
+
+jobs:
+  aggregate-and-build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout target repository
+        uses: actions/checkout@v4
+      
+      - name: Identify source repository and determine target directory
+        id: identify
+        run: |
+          SOURCE="${{ github.event.client_payload.repository }}"
+          echo "source_repo=$SOURCE" >> $GITHUB_OUTPUT
+          
+          # Map source repositories to target directories
+          case "$SOURCE" in
+            "RyanKim17920/Papers2Code-updates")
+              echo "target_dir=content/papers" >> $GITHUB_OUTPUT
+              echo "category=papers" >> $GITHUB_OUTPUT
+              ;;
+            "OrgName/tutorials-repo")
+              echo "target_dir=content/tutorials" >> $GITHUB_OUTPUT
+              echo "category=tutorials" >> $GITHUB_OUTPUT
+              ;;
+            "OrgName/blog-posts")
+              echo "target_dir=content/blog" >> $GITHUB_OUTPUT
+              echo "category=blog" >> $GITHUB_OUTPUT
+              ;;
+            *)
+              echo "target_dir=content/general" >> $GITHUB_OUTPUT
+              echo "category=general" >> $GITHUB_OUTPUT
+              ;;
+          esac
+          
+          echo "📂 Content will be synced to: $(cat $GITHUB_OUTPUT | grep target_dir | cut -d'=' -f2)"
+      
+      - name: Fetch and sync content
+        env:
+          SOURCE_REPO: ${{ steps.identify.outputs.source_repo }}
+          SOURCE_SHA: ${{ github.event.client_payload.sha }}
+          TARGET_DIR: ${{ steps.identify.outputs.target_dir }}
+          CATEGORY: ${{ steps.identify.outputs.category }}
+        run: |
+          echo "📥 Fetching content from $SOURCE_REPO"
+          
+          # Clone source repository
+          git clone https://github.com/$SOURCE_REPO.git source-content
+          cd source-content
+          git checkout $SOURCE_SHA
+          
+          # Create target directory
+          mkdir -p ../$TARGET_DIR
+          
+          # Clear existing content from this source to avoid stale files
+          rm -f ../$TARGET_DIR/*.md
+          
+          # Copy markdown files
+          if [ -d "_posts" ]; then
+            echo "Syncing posts from _posts/ directory..."
+            for file in _posts/*.md; do
+              if [ -f "$file" ]; then
+                filename=$(basename "$file")
+                # Add category metadata to frontmatter if not present
+                cp "$file" "../$TARGET_DIR/$filename"
+              fi
+            done
+          fi
+          
+          # Generate an index file for this category
+          cat > "../$TARGET_DIR/_index.md" <<EOF
+          ---
+          title: "${CATEGORY^} Content"
+          source: "$SOURCE_REPO"
+          last_updated: "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          ---
+          
+          Content synchronized from $SOURCE_REPO
+          EOF
+          
+          echo "✅ Content synced to $TARGET_DIR"
+          ls -la ../$TARGET_DIR
+      
+      - name: Transform and enrich content
+        run: |
+          # Optional: Add processing steps here
+          # Examples:
+          # - Parse and validate frontmatter
+          # - Generate metadata index
+          # - Optimize images
+          # - Convert formats
+          
+          echo "Processing content..."
+          
+          # Example: Add source attribution to each file
+          find content -name "*.md" -type f | while read file; do
+            if ! grep -q "source_repo:" "$file"; then
+              # Add source info if not present
+              echo "Adding source attribution to $file"
+            fi
+          done
+      
+      - name: Generate content index
+        run: |
+          # Create a JSON index of all content
+          echo "Generating content index..."
+          
+          cat > content/index.json <<EOF
+          {
+            "last_updated": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "sources": {
+              "papers": $(find content/papers -name "*.md" -not -name "_index.md" | wc -l),
+              "tutorials": $(find content/tutorials -name "*.md" -not -name "_index.md" 2>/dev/null | wc -l || echo 0),
+              "blog": $(find content/blog -name "*.md" -not -name "_index.md" 2>/dev/null | wc -l || echo 0),
+              "general": $(find content/general -name "*.md" -not -name "_index.md" 2>/dev/null | wc -l || echo 0)
+            }
+          }
+          EOF
+          
+          echo "Content index generated"
+          cat content/index.json
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build site
+        run: npm run build
+        env:
+          NODE_ENV: production
+      
+      - name: Deploy
+        run: |
+          # Add your deployment command here
+          echo "Deploying site..."
+          # npm run deploy
+          # or use GitHub Actions deployment
+      
+      - name: Commit updated content back to repo (optional)
+        if: false  # Set to true if you want to commit synced content
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add content/
+          git diff --staged --quiet || git commit -m "Update content from ${{ steps.identify.outputs.source_repo }}"
+          git push
+      
+      - name: Summary
+        env:
+          SOURCE: ${{ steps.identify.outputs.source_repo }}
+          CATEGORY: ${{ steps.identify.outputs.category }}
+        run: |
+          echo "### Content Aggregation Complete ✅" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Source Repository:** $SOURCE" >> $GITHUB_STEP_SUMMARY
+          echo "**Category:** $CATEGORY" >> $GITHUB_STEP_SUMMARY
+          echo "**Target Directory:** ${{ steps.identify.outputs.target_dir }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit SHA:** ${{ github.event.client_payload.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Content has been synchronized and site has been rebuilt." >> $GITHUB_STEP_SUMMARY
+
+permissions:
+  contents: write  # Needed if committing back to repo
+  pages: write
+  id-token: write
