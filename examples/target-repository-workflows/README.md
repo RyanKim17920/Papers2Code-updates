@@ -59,7 +59,25 @@ A flexible workflow for Next.js sites that:
 
 ---
 
-### 5. `advanced-multi-source.yml`
+### 5. `fastapi-react-vercel.yml`
+**Use this if:** Your site uses FastAPI backend + React frontend deployed on Vercel
+
+A complete workflow for full-stack applications that:
+- Syncs markdown files to backend or frontend directories
+- Processes markdown to JSON for API consumption
+- Deploys to Vercel using CLI or Deploy Hooks
+- Commits processed content back to repository
+
+**Requirements:**
+- FastAPI + React project structure
+- Vercel project configured
+- Vercel token or deploy hook URL
+
+**See also:** [FastAPI + React + Vercel Integration Guide](../FASTAPI_REACT_VERCEL_GUIDE.md)
+
+---
+
+### 6. `advanced-multi-source.yml`
 **Use this if:** You aggregate content from multiple repositories
 
 An advanced workflow that:

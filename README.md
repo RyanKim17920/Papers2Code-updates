@@ -10,7 +10,8 @@ A content repository that automatically notifies other repositories to rebuild w
 - **[Integration Guide](INTEGRATION_GUIDE.md)** - Comprehensive guide explaining how this repository connects to target repositories and how to structure them
 - **[Connection Diagram](CONNECTION_DIAGRAM.md)** - Visual explanation of how repositories communicate
 - **[Repository B Setup](examples/REPOSITORY_B_SETUP.md)** - Quick reference for setting up target repositories
-- **[Example Workflows](examples/target-repository-workflows/)** - Ready-to-use workflow templates for Jekyll, Hugo, Next.js, and more
+- **[Example Workflows](examples/target-repository-workflows/)** - Ready-to-use workflow templates for Jekyll, Hugo, Next.js, FastAPI + React, and more
+- **[FastAPI + React + Vercel Guide](examples/FASTAPI_REACT_VERCEL_GUIDE.md)** - Specific guide for full-stack apps on Vercel
 - **[FAQ](FAQ.md)** - Frequently asked questions and troubleshooting
 - **[Quick Start](#setup-instructions)** - Basic setup instructions (below)
 

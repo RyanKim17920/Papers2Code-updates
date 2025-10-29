@@ -102,12 +102,14 @@ Papers2Code-updates/
 │
 └── examples/
     ├── REPOSITORY_B_SETUP.md         # Quick setup reference
+    ├── FASTAPI_REACT_VERCEL_GUIDE.md # FastAPI + React + Vercel guide
     └── target-repository-workflows/   # Example workflows for target repos
         ├── README.md                  # Guide to choosing examples
         ├── basic-example.yml
         ├── jekyll-github-pages.yml
         ├── hugo-example.yml
         ├── nextjs-example.yml
+        ├── fastapi-react-vercel.yml
         └── advanced-multi-source.yml
 ```
 
@@ -155,7 +157,22 @@ Build a modern web application that fetches and displays blog content.
 
 ---
 
-### Use Case 4: Multi-Source Content Hub
+### Use Case 4: Full-Stack App with FastAPI + React on Vercel
+**Documentation:** [FastAPI + React + Vercel Guide](examples/FASTAPI_REACT_VERCEL_GUIDE.md)
+
+Build a full-stack application with FastAPI backend and React frontend that automatically updates content.
+
+**You need:**
+- This repository configured with secrets
+- FastAPI + React project with the workflow
+- Vercel project configured
+- Vercel token or deploy hook
+
+**Time to setup:** ~30 minutes
+
+---
+
+### Use Case 5: Multi-Source Content Hub
 **Documentation:** [Advanced Multi-Source Example](examples/target-repository-workflows/advanced-multi-source.yml)
 
 Aggregate content from multiple repositories into a single website.
