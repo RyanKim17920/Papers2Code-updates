@@ -4,6 +4,9 @@ A content repository that automatically notifies other repositories to rebuild w
 
 ## 📚 Documentation
 
+**→ [Complete Documentation Index](DOCUMENTATION_INDEX.md)** - Start here for a guided tour
+
+**Quick Links:**
 - **[Integration Guide](INTEGRATION_GUIDE.md)** - Comprehensive guide explaining how this repository connects to target repositories and how to structure them
 - **[Connection Diagram](CONNECTION_DIAGRAM.md)** - Visual explanation of how repositories communicate
 - **[Repository B Setup](examples/REPOSITORY_B_SETUP.md)** - Quick reference for setting up target repositories
